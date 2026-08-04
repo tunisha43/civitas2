@@ -1,0 +1,252 @@
+# MEA Codes: Corrected Codebase Registry
+
+This file contains a record of all corrected codeblocks, integration hooks, and custom subpage components implemented during the session to bypass the upcoming milestone block and secure multi-role access.
+
+---
+
+## 1. App Route Role-Synchronization Engine (`src/App.tsx`)
+This `useEffect` hook ensures that when a user swaps roles via the float control, the browser path matches their active workspace navigation and instantly mounts their correct role-specific layout.
+
+```tsx
+  // Sync current dashboard path with profile.role if they are on a dashboard route
+  useEffect(() => {
+    if (profile?.role && currentPath.startsWith('dashboard')) {
+      const targetPath = ROLE_DASHBOARD_PATHS[profile.role];
+      if (targetPath) {
+        // If they are on any dashboard path and it doesn't match the active role's target dashboard, sync it
+        const currentBase = currentPath.split('/')[1] || '';
+        const targetBase = targetPath.split('/')[1] || '';
+        if (currentBase !== targetBase) {
+          handleNavigate(targetPath);
+        }
+      }
+    }
+  }, [profile?.role, currentPath]);
+```
+
+---
+
+## 2. Dynamic Router Sub-Module Router (`src/pages/Dashboard.tsx`)
+This block registers the newly unlocked Student, Material Seller, and Super Administrator components to override the legacy "upcoming milestone blocked" placeholder cards.
+
+```tsx
+      if (activeRole === 'Student' && [
+        'My Courses',
+        'Mentorship',
+        'Scholarships',
+        'Research Hub',
+        'Competitions',
+        'Career Center',
+        'Community',
+        'Settings'
+      ].includes(activeTab)) {
+        return (
+          <StudentDashboardSubpages
+            addToast={addToast}
+            profile={profile}
+            activeTab={activeTab}
+          />
+        );
+      }
+      if (activeRole === 'Material Seller' && [
+        'My Products',
+        'Orders',
+        'Inventory',
+        'Customers',
+        'Reports',
+        'Payments',
+        'Settings'
+      ].includes(activeTab)) {
+        return (
+          <SellerDashboardSubpages
+            addToast={addToast}
+            profile={profile}
+            activeTab={activeTab}
+          />
+        );
+      }
+      if (activeRole === 'Super Administrator' && [
+        'All Users',
+        'All Transactions',
+        'Platform Analytics',
+        'Role Management',
+        'System Health',
+        'Audit Logs',
+        'Settings'
+      ].includes(activeTab)) {
+        return (
+          <AdminDashboardSubpages
+            addToast={addToast}
+            profile={profile}
+            activeTab={activeTab}
+          />
+        );
+      }
+```
+
+---
+
+## 3. Interactive Student Discussion Thread Replies (`src/components/StudentDashboardSubpages.tsx`)
+This handles opening discussion threads, upvoting, and commenting directly under the Student persona, immediately incrementing reply metrics.
+
+```tsx
+  // State definitions added
+  const [forumPosts, setForumPosts] = useState([
+    { id: 'f1', title: 'Why is Eurocode 2 preferred over BS 8110 for new Lagos high-rise projects?', author: 'David Okafor', replies: 2, category: 'Structural', likes: 24 },
+    { id: 'f2', title: 'Tips on calculating wind load on coastal steel warehouses?', author: 'Grace Ade', replies: 1, category: 'Steel Design', likes: 18 }
+  ]);
+  const [newPostTitle, setNewPostTitle] = useState('');
+  const [newPostCat, setNewPostCat] = useState('Structural');
+
+  const [threadComments, setThreadComments] = useState<Record<string, Array<{ id: string; author: string; role: string; content: string; date: string }>>>({
+    'f1': [
+      { id: 'c-1', author: 'Engr. Kola Adeyemi', role: 'Professional', content: 'Eurocode 2 provides a more consistent, probabilistic approach to safety and serviceability. BS 8110 is legacy now.', date: '3 hours ago' },
+      { id: 'c-2', author: 'Josephine Sintei', role: 'Student', content: 'Makes sense! I am using EC2 for my civil engineering project mix design study.', date: '1 hour ago' }
+    ],
+    'f2': [
+      { id: 'c-3', author: 'Amina Nwosu', role: 'Professional', content: 'Be sure to apply local wind speed coefficients for Lagos coastal regions. It can be high near Lekki/Victoria Island.', date: 'Yesterday' }
+    ]
+  });
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+
+  const handleAddComment = (e: React.FormEvent, threadId: string) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+    const newComment = {
+      id: `c-${Date.now()}`,
+      author: profile?.fullName || 'Josephine Sintei',
+      role: 'Student',
+      content: commentText,
+      date: 'Just now'
+    };
+    setThreadComments(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), newComment]
+    }));
+    setForumPosts(prev => prev.map(p => p.id === threadId ? { ...p, replies: p.replies + 1 } : p));
+    setCommentText('');
+    addToast('success', 'Comment Posted', 'Your reply has been published to the student forum thread.');
+  };
+```
+
+And the expanded JSX rendering code:
+
+```tsx
+                {forumPosts.map(post => {
+                  const isExpanded = activeThreadId === post.id;
+                  const comments = threadComments[post.id] || [];
+                  return (
+                    <div key={post.id} className="p-4 border border-gray-100 dark:border-slate-700 rounded-2xl text-left space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1 cursor-pointer flex-1" onClick={() => setActiveThreadId(isExpanded ? null : post.id)}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-black uppercase tracking-wider">{post.category}</span>
+                            <span className="text-[10px] text-gray-400 font-bold">{post.replies} replies</span>
+                          </div>
+                          <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase mt-1 hover:text-[#1A56A0] transition-colors">{post.title}</h4>
+                          <p className="text-[10px] text-gray-400 font-semibold">Started by: {post.author}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setForumPosts(prev => prev.map(p => p.id === post.id ? { ...p, likes: p.likes + 1 } : p));
+                              addToast('success', 'Thread Endorsed', 'Upvoted discussion topic.');
+                            }}
+                            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-700 text-gray-500 dark:text-gray-300 rounded-xl flex items-center gap-1 text-[10px] font-black uppercase cursor-pointer"
+                          >
+                            ▲ {post.likes} Upvotes
+                          </button>
+                          <button
+                            onClick={() => setActiveThreadId(isExpanded ? null : post.id)}
+                            className="px-3 py-1.5 bg-blue-50 text-[#1A56A0] dark:bg-slate-700 rounded-xl text-[10px] font-black uppercase cursor-pointer"
+                          >
+                            {isExpanded ? 'Hide' : 'Comment & View'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Comments block */}
+                      {isExpanded && (
+                        <div className="mt-4 border-t border-gray-50 dark:border-slate-700/50 pt-4 space-y-4">
+                          <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Replies & Comments</h5>
+                          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                            {comments.map(c => (
+                              <div key={c.id} className="p-3 bg-gray-50 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-slate-800 text-xs">
+                                <div className="flex justify-between text-[10px] font-bold text-gray-400">
+                                  <span>{c.author} ({c.role})</span>
+                                  <span>{c.date}</span>
+                                </div>
+                                <p className="text-gray-700 dark:text-gray-300 mt-1.5 leading-relaxed">{c.content}</p>
+                              </div>
+                            ))}
+                            {comments.length === 0 && (
+                              <p className="text-[11px] text-gray-400 italic">No comments yet. Be the first to reply!</p>
+                            )}
+                          </div>
+
+                          {/* Post comment form */}
+                          <form onSubmit={(e) => handleAddComment(e, post.id)} className="flex gap-2">
+                            <input
+                              type="text"
+                              required
+                              placeholder="Write a comment as a student..."
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              className="flex-grow px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:border-[#1A56A0]"
+                            />
+                            <button type="submit" className="px-4 py-2 bg-[#1A56A0] text-white text-[10px] font-black uppercase rounded-xl cursor-pointer">
+                              Reply
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+```
+
+---
+
+## 4. Professional Dashboard Subpages (`src/components/ProfessionalDashboardSubpages.tsx`)
+This registers a fully-featured standalone workspace for individual engineers, architects, and quantity surveyors, loaded with specific target defaults (2 active projects, 3 requests, 2 quotes, and ₦180,000 earnings), integrated drawing uploads, and persistent `localStorage` syncing.
+
+```tsx
+// Implemented full workspace modules:
+// - Professional Dashboard Home: Welcome Banner, Summary Cards, Pending Requests, Earnings Analytics, Drawing request board.
+// - My Portfolio: Projects grid, certifications registry, add new works form.
+// - Client Requests: Vetting requests, detailed info overlays, respond with bid proposal.
+// - Active Projects: Vane shear, density tests, concrete pillar site tracker hooks.
+// - Invoices: Automated billing sheets, draft/sent states, PDF downloads, and custom line additions.
+// - Calendar & Messaging: Site crew scheduling and chat.
+// - Analytics: Monthly performance charts.
+// - Settings: Match customer settings perfectly with a 4-tab (profile, notifications, security, account) layout.
+```
+
+---
+
+## 5. Company Dashboard Subpages (`src/components/CompanyDashboardSubpages.tsx`)
+Acts as the central cockpit for real estate development firms and municipal civil engineering consultancies.
+
+```tsx
+// Implemented corporate developer assets:
+// - Company Dashboard Home: Corporate welcome greeting, Open Tenders status overview, Material Procurement spend.
+// - Projects Workspace: Full active construction list, assigned site crews, site tracker overlays.
+// - Team Management: CAC rosters, COREN license vetting, and add team member forms.
+// - Tenders Board: Bidding queues, FMOW contracts, budget allocations, and Turn-key submittal form.
+// - Procurement Log: Cement aggregate logs, steel mills delivery trackers, aggregate cost summaries.
+// - Invoices & Settlement Banking: Zenith Bank escrow pay-outs, progress billing sheets, and client dispatch.
+// - Settings: Profile (incorporation details, CAC registration number), Notifications, and Settlements account.
+```
+
+---
+
+## 6. Professional Verification System & Company Registration Flows
+Implements professional regulatory checking mechanisms and enterprise auditing tools.
+
+```tsx
+// - Professional Verification Subpage: Fully interactive 4-step wizard with drag-and-drop document uploads, NIN slips matching, and license status tracking (Unverified, Pending, Verified states).
+// - Company Registration Subpage: Dynamic CAC RC documentation wizard with Corporate TIN validation, tax clearance certificate loaders, and corporate status alerts.
+// - Database Persistence: Connected to supabaseSim.db with simulated storage triggers in localStorage.
+// - Verification Badges: Built-in support for COREN, ARCON, NIOB, and MEA verified shields with Engineering Blue (#1A56A0) styling tags.
+```

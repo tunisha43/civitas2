@@ -1,0 +1,6 @@
+{
+  "name": "My Engineering App",
+  "description": "Africa's leading engineering and construction ecosystem connecting customers, professionals, students, suppliers, companies, and other stakeholders. Built for Nigeria and scaling across Africa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

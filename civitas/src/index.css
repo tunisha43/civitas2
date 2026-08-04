@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1A56A0;
+  --color-primary-dark: #0F3D7A;
+  --color-primary-light: #E8F0FA;
+  --color-accent: #C9A84C;
+  --color-success-verified: #059669;
+  --color-warning-token: #F97316;
+  --color-error-token: #EF4444;
+  --color-ai-accent: #EAB308;
+  
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F8F9FA;
+  --color-bg-tertiary: #F1F3F5;
+  
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  
+  --color-border-default: #E5E7EB;
+  --color-border-focus: #1A56A0;
+  
+  --font-sora: "Sora", sans-serif;
+  --font-jakarta: "Plus Jakarta Sans", sans-serif;
+  
+  --spacing-xs-token: 4px;
+  --spacing-sm-token: 8px;
+  --spacing-md-token: 16px;
+  --spacing-lg-token: 24px;
+  --spacing-xl-token: 32px;
+  --spacing-2xl-token: 48px;
+  --spacing-3xl-token: 64px;
+  --spacing-4xl-token: 96px;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-jakarta);
+    @apply antialiased transition-colors duration-200;
+  }
+  
+  h1, h2, h3, h4, .font-sora {
+    font-family: var(--font-sora);
+  }
+}
+
+/* Custom styles for Glass Card and typography utility classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Focus Ring standard style */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-[#1A56A0] focus:ring-offset-2 dark:focus:ring-offset-slate-900;
+}
