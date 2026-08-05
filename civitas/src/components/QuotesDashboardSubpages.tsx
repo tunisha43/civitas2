@@ -7,7 +7,8 @@ import {
   Sparkles, ShoppingBag, Truck, Hammer, Heart, Filter, Check, 
   ExternalLink, EyeOff, CornerDownRight, RefreshCw
 } from 'lucide-react';
-import { KEYS, QuoteRequest, Quote } from '../lib/supabase';
+import { supabaseSim, QuoteRequest, Quote } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { PLACEHOLDER_PROFESSIONALS } from '../pages/HireProfessionals';
 
 // Utility for formatting numbers to Nigerian Naira
@@ -26,6 +27,8 @@ interface CustomerQuotesDashboardSubpageProps {
 }
 
 export const CustomerQuotesDashboardSubpage: React.FC<CustomerQuotesDashboardSubpageProps> = ({ onNavigate, addToast }) => {
+  const { user } = useAuth();
+  const customerId = user?.id || '';
   // Tabs: 'Active Requests' | 'Received Quotes' | 'Accepted Quotes' | 'Expired'
   const [activeTab, setActiveTab] = useState<'Active Requests' | 'Received Quotes' | 'Accepted Quotes' | 'Expired'>('Active Requests');
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
@@ -72,14 +75,15 @@ export const CustomerQuotesDashboardSubpage: React.FC<CustomerQuotesDashboardSub
   const [escrowStep, setEscrowStep] = useState<1 | 2 | 3 | 4>(1);
   const [escrowAgreed, setEscrowAgreed] = useState(false);
 
-  // Load quote data from localStorage
-  const loadData = () => {
+  // Load quote data from Supabase
+  const loadData = async () => {
+    if (!customerId) return;
     try {
-      const storedRequests = localStorage.getItem(KEYS.QUOTE_REQUESTS);
-      const storedQuotes = localStorage.getItem(KEYS.QUOTES);
-      
-      if (storedRequests) setQuoteRequests(JSON.parse(storedRequests));
-      if (storedQuotes) setQuotes(JSON.parse(storedQuotes));
+      const requests = await supabaseSim.db.getMyQuoteRequests(customerId);
+      setQuoteRequests(requests);
+      const requestIds = requests.map(r => r.id);
+      const relatedQuotes = await supabaseSim.db.getQuotesForRequests(requestIds);
+      setQuotes(relatedQuotes);
     } catch (e) {
       console.error('Failed to load quote data:', e);
     }
@@ -113,7 +117,7 @@ export const CustomerQuotesDashboardSubpage: React.FC<CustomerQuotesDashboardSub
       localStorage.removeItem('quote_auto_plan');
       addToast('info', 'House Plan Selected', `You are requesting a construction quote for plan ${parsed.name}.`);
     }
-  }, []);
+  }, [customerId]);
 
   // Material checklist choices
   const materialChoices = [
@@ -151,113 +155,57 @@ export const CustomerQuotesDashboardSubpage: React.FC<CustomerQuotesDashboardSub
   };
 
   // Submit flow
-  const handleSubmitQuoteRequest = () => {
+  const handleSubmitQuoteRequest = async () => {
     if (!title || !description || !locationCity) {
       addToast('error', 'Incomplete Form', 'Please fill in all required fields including the location City.');
       return;
     }
-
-    const refNo = 'QR-' + Math.floor(100000 + Math.random() * 900000);
-    const newRequest: QuoteRequest = {
-      id: refNo,
-      customer_id: 'usr_admin', // Logged in customer in simulator
-      type: selectedType!,
-      title,
-      description,
-      location: `${locationState}, ${locationCity}`,
-      budget_min: Number(budgetMin),
-      budget_max: Number(budgetMax),
-      timeline,
-      visibility,
-      status: 'Awaiting Quotes',
-      created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-      service_type: selectedType === 'Professional Service' ? serviceType : undefined,
-      duration: selectedType === 'Equipment Rental' ? duration : undefined,
-      material_categories: selectedType === 'Construction Materials' ? materialCategories : undefined,
-      material_quantities: selectedType === 'Construction Materials' ? materialQuantities : undefined,
-      equipment_type: selectedType === 'Equipment Rental' ? equipmentType : undefined,
-      project_type: selectedType === 'Full Project' ? projectType : undefined,
-      house_plan: selectedType === 'Full Project' ? housePlan : undefined,
-      specific_professionals: visibility === 'Send to specific professionals' ? selectedProfessionals : undefined
-    };
-
-    const updatedRequests = [newRequest, ...quoteRequests];
-    localStorage.setItem(KEYS.QUOTE_REQUESTS, JSON.stringify(updatedRequests));
-    setQuoteRequests(updatedRequests);
-
-    // Also auto-generate 2 simulated professional quotes in 2 seconds if visibility isn't strict,
-    // to keep the applet engaging and functional!
-    if (visibility !== 'Send to specific professionals' || selectedProfessionals.length > 0) {
-      const delayQuotes = setTimeout(() => {
-        const storedQuotes = localStorage.getItem(KEYS.QUOTES) || '[]';
-        const currentQuotes = JSON.parse(storedQuotes);
-        
-        // Pick professionals
-        const pros = PLACEHOLDER_PROFESSIONALS.filter(p => 
-          visibility === 'Send to specific professionals' 
-            ? selectedProfessionals.includes(p.id)
-            : true
-        ).slice(0, 2);
-
-        const newQuotes = pros.map((pro, index) => {
-          const quotedAmount = Math.round(budgetMin + (budgetMax - budgetMin) * (index === 0 ? 0.35 : 0.65));
-          const breakdownItems = selectedType === 'Construction Materials' 
-            ? materialCategories.map(cat => ({ item: `${cat} Supply`, amount: Math.round(quotedAmount / materialCategories.length) }))
-            : selectedType === 'Equipment Rental'
-              ? [{ item: `Rental of ${equipmentType}`, amount: Math.round(quotedAmount * 0.8) }, { item: 'Operator & Fueling Overhead', amount: Math.round(quotedAmount * 0.2) }]
-              : [
-                  { item: 'Labour Charges', amount: Math.round(quotedAmount * 0.4) },
-                  { item: 'Materials Sourcing', amount: Math.round(quotedAmount * 0.4) },
-                  { item: 'Administrative & Contingencies', amount: Math.round(quotedAmount * 0.2) }
-                ];
-
-          return {
-            id: `q-auto-${refNo}-${pro.id}`,
-            quote_request_id: refNo,
-            professional_id: pro.id,
-            professional_name: pro.name,
-            professional_title: pro.profession,
-            professional_avatar: pro.avatar,
-            professional_rating: pro.rating,
-            amount: quotedAmount,
-            breakdown: breakdownItems,
-            timeline: selectedType === 'Equipment Rental' ? duration : timeline,
-            validity_days: 15,
-            notes: `Auto-submitted proposal based on standard Nigerian building standards. Ready to deliver with high precision. COREN registered.`,
-            status: 'Pending' as const,
-            created_at: new Date().toISOString()
-          };
-        });
-
-        const allUpdatedQuotes = [...newQuotes, ...currentQuotes];
-        localStorage.setItem(KEYS.QUOTES, JSON.stringify(allUpdatedQuotes));
-        setQuotes(allUpdatedQuotes);
-        
-        // Update request status to 'Quotes Received'
-        const requests = JSON.parse(localStorage.getItem(KEYS.QUOTE_REQUESTS) || '[]');
-        const targetReq = requests.find((r: QuoteRequest) => r.id === refNo);
-        if (targetReq) {
-          targetReq.status = 'Quotes Received';
-          localStorage.setItem(KEYS.QUOTE_REQUESTS, JSON.stringify(requests));
-          setQuoteRequests(requests);
-        }
-      }, 4000);
+    if (!customerId) {
+      addToast('error', 'Not Logged In', 'Please log in to submit a quote request.');
+      return;
     }
 
-    setCreatedRefNo(refNo);
-    setShowConfirmationScreen(true);
-    addToast('success', 'Quote Request Broadcasted', `Your request ${refNo} has been queued on the Nigerian constructor network.`);
+    try {
+      const newRequest = await supabaseSim.db.createQuoteRequest({
+        customer_id: customerId,
+        type: selectedType!,
+        title,
+        description,
+        location: `${locationState}, ${locationCity}`,
+        budget_min: Number(budgetMin),
+        budget_max: Number(budgetMax),
+        timeline,
+        visibility,
+        service_type: selectedType === 'Professional Service' ? serviceType : undefined,
+        duration: selectedType === 'Equipment Rental' ? duration : undefined,
+        material_categories: selectedType === 'Construction Materials' ? materialCategories : undefined,
+        material_quantities: selectedType === 'Construction Materials' ? materialQuantities : undefined,
+        equipment_type: selectedType === 'Equipment Rental' ? equipmentType : undefined,
+        project_type: selectedType === 'Full Project' ? projectType : undefined,
+        house_plan: selectedType === 'Full Project' ? housePlan : undefined,
+        specific_professionals: visibility === 'Send to specific professionals' ? selectedProfessionals : undefined
+      });
+
+      setQuoteRequests([newRequest, ...quoteRequests]);
+      setCreatedRefNo(newRequest.id);
+      setShowConfirmationScreen(true);
+      addToast('success', 'Quote Request Broadcasted', `Your request has been sent to professionals on the network.`);
+    } catch (e: any) {
+      addToast('error', 'Submission Failed', e.message || 'Could not submit your quote request.');
+    }
   };
 
-  const handleCancelRequest = (requestId: string) => {
+  const handleCancelRequest = async (requestId: string) => {
     if (confirm('Are you sure you want to cancel this quote request? This will retract it from all professionals.')) {
-      const updated = quoteRequests.filter(r => r.id !== requestId);
-      localStorage.setItem(KEYS.QUOTE_REQUESTS, JSON.stringify(updated));
-      setQuoteRequests(updated);
-      addToast('warning', 'Request Cancelled', `Quote request ${requestId} has been removed.`);
-      if (selectedRequestForDetail?.id === requestId) {
-        setSelectedRequestForDetail(null);
+      try {
+        await supabaseSim.db.cancelQuoteRequest(requestId);
+        setQuoteRequests(quoteRequests.filter(r => r.id !== requestId));
+        addToast('warning', 'Request Cancelled', `Your quote request has been removed.`);
+        if (selectedRequestForDetail?.id === requestId) {
+          setSelectedRequestForDetail(null);
+        }
+      } catch (e: any) {
+        addToast('error', 'Cancellation Failed', e.message || 'Could not cancel this request.');
       }
     }
   };
@@ -279,35 +227,30 @@ export const CustomerQuotesDashboardSubpage: React.FC<CustomerQuotesDashboardSub
     }, 2000);
   };
 
-  const handleFinishEscrow = () => {
-    // Complete the acceptance in db
-    const updatedQuotes = quotes.map(q => {
-      if (q.id === selectedQuoteForDetail?.id) {
-        return { ...q, status: 'Accepted' as const };
-      }
-      if (q.quote_request_id === selectedQuoteForDetail?.quote_request_id) {
-        return { ...q, status: 'Declined' as const };
-      }
-      return q;
-    });
+  const handleFinishEscrow = async () => {
+    if (!selectedQuoteForDetail) return;
+    try {
+      await supabaseSim.db.acceptQuote(selectedQuoteForDetail);
 
-    const updatedRequests = quoteRequests.map(r => {
-      if (r.id === selectedQuoteForDetail?.quote_request_id) {
-        return { ...r, status: 'Quote Accepted' as const };
-      }
-      return r;
-    });
+      const updatedQuotes = quotes.map(q => {
+        if (q.id === selectedQuoteForDetail.id) return { ...q, status: 'Accepted' as const };
+        if (q.quote_request_id === selectedQuoteForDetail.quote_request_id) return { ...q, status: 'Declined' as const };
+        return q;
+      });
+      const updatedRequests = quoteRequests.map(r =>
+        r.id === selectedQuoteForDetail.quote_request_id ? { ...r, status: 'Quote Accepted' as const } : r
+      );
 
-    localStorage.setItem(KEYS.QUOTES, JSON.stringify(updatedQuotes));
-    localStorage.setItem(KEYS.QUOTE_REQUESTS, JSON.stringify(updatedRequests));
-    setQuotes(updatedQuotes);
-    setQuoteRequests(updatedRequests);
-
-    setIsEscrowFlowOpen(false);
-    setSelectedQuoteForDetail(null);
-    setSelectedRequestForDetail(null);
-    setActiveTab('Accepted Quotes');
-    addToast('success', 'Contract Approved', 'First milestone escrow secured. The professional has been notified to deploy.');
+      setQuotes(updatedQuotes);
+      setQuoteRequests(updatedRequests);
+      setIsEscrowFlowOpen(false);
+      setSelectedQuoteForDetail(null);
+      setSelectedRequestForDetail(null);
+      setActiveTab('Accepted Quotes');
+      addToast('success', 'Contract Approved', 'First milestone escrow secured. The professional has been notified to deploy.');
+    } catch (e: any) {
+      addToast('error', 'Acceptance Failed', e.message || 'Could not accept this quote.');
+    }
   };
 
   const handleToggleCompare = (quoteId: string) => {
@@ -1301,6 +1244,8 @@ interface ProfessionalQuotesDashboardSubpageProps {
 }
 
 export const ProfessionalQuotesDashboardSubpage: React.FC<ProfessionalQuotesDashboardSubpageProps> = ({ addToast }) => {
+  const { user, profile } = useAuth();
+  const professionalId = user?.id || '';
   const [openRequests, setOpenRequests] = useState<QuoteRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<QuoteRequest | null>(null);
   
@@ -1318,14 +1263,10 @@ export const ProfessionalQuotesDashboardSubpage: React.FC<ProfessionalQuotesDash
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBiddingForm, setShowBiddingForm] = useState(false);
 
-  const loadRequests = () => {
+  const loadRequests = async () => {
     try {
-      const stored = localStorage.getItem(KEYS.QUOTE_REQUESTS);
-      if (stored) {
-        const parsed: QuoteRequest[] = JSON.parse(stored);
-        // Display open quote requests not accepted yet
-        setOpenRequests(parsed.filter(r => r.status !== 'Quote Accepted' && r.status !== 'Expired'));
-      }
+      const requests = await supabaseSim.db.getOpenQuoteRequests();
+      setOpenRequests(requests);
     } catch (e) {
       console.error(e);
     }
@@ -1359,60 +1300,39 @@ export const ProfessionalQuotesDashboardSubpage: React.FC<ProfessionalQuotesDash
     setAmount(total);
   };
 
-  const handleSubmitQuote = () => {
+  const handleSubmitQuote = async () => {
     if (amount <= 0 || !notes) {
       addToast('error', 'Incomplete proposal', 'Please enter a valid amount and complete your cover letter notes.');
       return;
     }
+    if (!professionalId || !selectedRequest) {
+      addToast('error', 'Not Logged In', 'Please log in as a professional to submit a proposal.');
+      return;
+    }
 
     setIsSubmitting(true);
-    
-    // Simulate professional profile context
-    const currentProId = 'prof-1'; // Engr. Kola Adeyemi in simulator
-    const currentProName = 'Engr. Kola Adeyemi';
-    const currentProTitle = 'Structural Engineer';
-    const currentProAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=300';
-    const currentProRating = 4.9;
-
-    setTimeout(() => {
-      const storedQuotes = localStorage.getItem(KEYS.QUOTES) || '[]';
-      const quotes: Quote[] = JSON.parse(storedQuotes);
-
-      const newQuote: Quote = {
-        id: `q-prof-${selectedRequest?.id}-${Math.floor(1000 + Math.random() * 9000)}`,
-        quote_request_id: selectedRequest!.id,
-        professional_id: currentProId,
-        professional_name: currentProName,
-        professional_title: currentProTitle,
-        professional_avatar: currentProAvatar,
-        professional_rating: currentProRating,
+    try {
+      await supabaseSim.db.submitQuote({
+        quote_request_id: selectedRequest.id,
+        professional_id: professionalId,
+        professional_name: profile?.fullName || 'Registered Professional',
+        professional_title: 'Professional',
         amount,
         breakdown,
         timeline,
         validity_days: Number(validityDays),
         notes,
-        status: 'Pending',
-        created_at: new Date().toISOString()
-      };
-
-      const updatedQuotes = [newQuote, ...quotes];
-      localStorage.setItem(KEYS.QUOTES, JSON.stringify(updatedQuotes));
-
-      // Update request status to Quotes Received
-      const storedRequests = localStorage.getItem(KEYS.QUOTE_REQUESTS) || '[]';
-      const requests: QuoteRequest[] = JSON.parse(storedRequests);
-      const reqIdx = requests.findIndex(r => r.id === selectedRequest?.id);
-      if (reqIdx !== -1) {
-        requests[reqIdx].status = 'Quotes Received';
-        localStorage.setItem(KEYS.QUOTE_REQUESTS, JSON.stringify(requests));
-      }
+      });
 
       setIsSubmitting(false);
       setShowBiddingForm(false);
       setSelectedRequest(null);
       loadRequests();
-      addToast('success', 'Proposal Submitted', 'Your itemised structural quote has been securely sent to the customer escrow queue.');
-    }, 1500);
+      addToast('success', 'Proposal Submitted', 'Your itemised quote has been securely sent to the customer.');
+    } catch (e: any) {
+      setIsSubmitting(false);
+      addToast('error', 'Submission Failed', e.message || 'Could not submit your proposal.');
+    }
   };
 
   return (
