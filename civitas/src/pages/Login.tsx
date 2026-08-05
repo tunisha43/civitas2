@@ -1,3 +1,13 @@
+None selected 
+
+Skip to content
+Using Gmail with screen readers
+in:sent 
+Conversations
+16% of 15 GB used
+Terms · Privacy · Program Policies
+Last account activity: 0 minutes ago
+Details
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, Mail, Lock, LogIn, Sparkles } from 'lucide-react';
@@ -14,6 +24,9 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
   const handleDemoLogin = async (role: string) => {
     setDemoLoading(role);
@@ -63,14 +76,27 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
       addToast('error', 'Authentication Error', 'Please enter your email address.');
       return;
     }
-    if (!password) {
-      addToast('error', 'Authentication Error', 'Please enter your password.');
-      return;
-    }
 
     const res = await signIn({ email });
     if (res.error) {
       addToast('error', 'Login Failed', res.error);
+    } else {
+      addToast('success', 'Code Sent', `Check ${email} for your 6-digit login code.`);
+      setOtpStep(true);
+    }
+  };
+
+  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode) {
+      addToast('error', 'Input Error', 'Please enter the 6-digit code sent to your email.');
+      return;
+    }
+    setVerifying(true);
+    const res = await verifyOtp(email, otpCode);
+    setVerifying(false);
+    if (res.error) {
+      addToast('error', 'Verification Failed', res.error);
     } else {
       addToast('success', 'Welcome Back', 'Successfully logged into My Engineering App.');
       onNavigate('dashboard');
@@ -92,7 +118,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className={`space-y-6 ${otpStep ? 'hidden' : ''}`}>
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="login-email">
                 Email Address
@@ -134,8 +160,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Enter your security password"
+                  placeholder="Not required — we'll email you a login code"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-11 pr-11 py-3 bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#1A56A0] focus:ring-1 focus:ring-[#1A56A0] text-sm transition-all"
@@ -179,6 +204,54 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
               )}
             </button>
           </form>
+
+          {otpStep && (
+            <form onSubmit={handleVerifyLoginOtp} className="space-y-6 animate-fade-in">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Enter the 6-digit code sent to <span className="font-semibold text-gray-900 dark:text-white">{email}</span>.
+                </p>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="login-otp-input">
+                  Verification Code
+                </label>
+                <input
+                  id="login-otp-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  placeholder="123456"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 text-center text-2xl tracking-[0.5em] focus:outline-none focus:border-[#1A56A0] focus:ring-1 focus:ring-[#1A56A0] transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={verifying}
+                className="w-full py-3.5 px-4 bg-[#1A56A0] text-white font-bold rounded-xl shadow-md hover:bg-[#1A56A0]/90 transition-all flex items-center justify-center gap-2 text-sm select-none cursor-pointer"
+                id="login-verify-otp-btn"
+              >
+                {verifying ? (
+                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <LogIn className="h-5 w-5" /> Verify &amp; Log In
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setOtpStep(false); setOtpCode(''); }}
+                className="w-full text-center text-xs font-semibold text-[#1A56A0] hover:underline"
+                id="login-change-email-btn"
+              >
+                Use a different email
+              </button>
+            </form>
+          )}
 
           {/* Social login placeholder */}
           <div className="relative my-8">
@@ -325,3 +398,5 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
     </div>
   );
 };
+Login.tsx
+Displaying Login.tsx.
