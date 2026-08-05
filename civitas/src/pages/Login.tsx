@@ -1,13 +1,3 @@
-None selected 
-
-Skip to content
-Using Gmail with screen readers
-in:sent 
-Conversations
-16% of 15 GB used
-Terms · Privacy · Program Policies
-Last account activity: 0 minutes ago
-Details
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, Mail, Lock, LogIn, Sparkles } from 'lucide-react';
@@ -398,5 +388,3 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, addToast }) => {
     </div>
   );
 };
-Login.tsx
-Displaying Login.tsx.
